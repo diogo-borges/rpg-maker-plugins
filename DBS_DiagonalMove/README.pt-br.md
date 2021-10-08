@@ -16,12 +16,6 @@ Este plugin permite a movimentação dos personagens em 8 direções.
  - Crie um novo arquivo na pasta `js/plugins` do seu projeto com o nome DBS_DiagonalMove.js
  - Cole o código fonte no novo arquivo criado no projeto e salve
 
-
-Se você possui GIT no seu computador, use o comando
-```
-git clone https://github.com/diogo-borges/rpg-maker-plugins/blob/master/DBS_DiagonalMove/DBS_DiagonalMove.js
-```
-
 ---
 
 ### Como ativar o plugin?
