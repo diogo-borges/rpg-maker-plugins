@@ -7,7 +7,7 @@
  * @plugindesc Move the character in 8 directions.
  * @author Diogo Borges (iAmDigs)
  *
- * @help 
+ * @help Version 1.1 Add mouse Diagonal Move
  * 
  * This plugin allows characters to move in 8 directions in the versions of
  * RPG Maker MV and MZ.
@@ -50,7 +50,7 @@
  * @plugindesc Move o personagem em 8 direções.
  * @author Diogo Borges (iAmDigs)
  *
- * @help 
+ * @help Versão 1.1 Diagonal Move com mouse adicionado
  * 
  * Este plugin permite a movimentação dos personagens em 8 direções nas
  * versões do RPG Maker MV e MZ.
@@ -91,7 +91,7 @@
 
 (() => {
   ImageManager.isDiagonalAnimatedCharacter = function (filename) {
-    const sign = filename.split("/").pop().match(/^[&]+/);
+    const sign = filename.split("/").pop().match(/^[!$&]+/);
     return sign && sign[0].includes("&");
   };
 
@@ -115,6 +115,7 @@
       case 3: return [6, 2];
       case 7: return [4, 8];
       case 9: return [6, 8];
+      default: return [0, 0];
     }
   };
 
@@ -124,9 +125,15 @@
 
   const _Game_CharacterBase_moveStraight = Game_CharacterBase.prototype.moveStraight;
   const _Game_CharacterBase_moveDiagonally = Game_CharacterBase.prototype.moveDiagonally;
+  const _Game_CharacterBase_setImage = Game_CharacterBase.prototype.setImage;
+
+  Game_CharacterBase.prototype.setImage = function () {
+    _Game_CharacterBase_setImage.call(this, ...arguments);
+    this._isDiagonalAnimatedCharacter = ImageManager.isDiagonalAnimatedCharacter(arguments[0]);
+  };
 
   Game_CharacterBase.prototype.moveStraight = function () {
-    const isAnimated = ImageManager.isDiagonalAnimatedCharacter(this.characterName());
+    const isAnimated = this._isDiagonalAnimatedCharacter;
 
     if (isAnimated && !this.isCharacterIndexEven()) this.setImage(this.characterName(), this.characterIndex() - 1);
 
@@ -135,8 +142,8 @@
 
   Game_CharacterBase.prototype.moveDiagonally = function (horz, vert) {
     _Game_CharacterBase_moveDiagonally.apply(this, arguments);
-    
-    const isAnimated = ImageManager.isDiagonalAnimatedCharacter(this.characterName());
+
+    const isAnimated = this._isDiagonalAnimatedCharacter;
 
     if (isAnimated) {
       if (this.isCharacterIndexEven()) this.setImage(this.characterName(), this.characterIndex() + 1);
@@ -146,4 +153,118 @@
       }
     }
   };
+
+  Game_Character.prototype.findDirectionTo = function (goalX, goalY) {
+    const searchLimit = this.searchLimit();
+    const mapWidth = $gameMap.width();
+    const nodeList = [];
+    const openList = [];
+    const closedList = [];
+    const start = {};
+    let best = start;
+
+    if (this.x === goalX && this.y === goalY) return 0;
+
+    start.parent = null;
+    start.x = this.x;
+    start.y = this.y;
+    start.g = 0;
+    start.f = $gameMap.distance(start.x, start.y, goalX, goalY);
+    nodeList.push(start);
+    openList.push(start.y * mapWidth + start.x);
+
+    while (nodeList.length > 0) {
+      let bestIndex = 0;
+      for (let i = 0; i < nodeList.length; i++) {
+        if (nodeList[i].f < nodeList[bestIndex].f) bestIndex = i;
+      }
+
+      const current = nodeList[bestIndex];
+      const x1 = current.x;
+      const y1 = current.y;
+      const pos1 = y1 * mapWidth + x1;
+      const g1 = current.g;
+
+      nodeList.splice(bestIndex, 1);
+      openList.splice(openList.indexOf(pos1), 1);
+      closedList.push(pos1);
+
+      if (current.x === goalX && current.y === goalY) {
+        best = current;
+        break;
+      }
+
+      if (g1 >= searchLimit) continue;
+
+      for (let j = 0; j < 9; j++) {
+        const direction = 1 + j;
+
+        if (direction === 5) continue;
+
+        let x2 = $gameMap.roundXWithDirection(x1, direction);
+        let y2 = $gameMap.roundYWithDirection(y1, direction);
+
+        const [horz, vert] = this.getDiagonalMove(direction);
+        const isMoveDiagonal = this.isMoveDiagonal(direction);
+        const canPassDiagonally = this.canPassDiagonally(x1, y1, horz, vert) && (this.canPass(x1, y1, horz) || this.canPass(x1, y1, vert));
+
+        if (isMoveDiagonal && canPassDiagonally) {
+          x2 = $gameMap.roundXWithDirection(x1, horz);
+          y2 = $gameMap.roundYWithDirection(y1, vert);
+        }
+
+        if (!isMoveDiagonal && !this.canPass(x1, y1, direction)) continue;
+
+        const pos2 = y2 * mapWidth + x2;
+
+        if (closedList.includes(pos2)) continue;
+
+        const g2 = g1 + 1;
+        const index2 = openList.indexOf(pos2);
+
+        if (index2 < 0 || g2 < nodeList[index2].g) {
+          let neighbor = {};
+          if (index2 >= 0) {
+            neighbor = nodeList[index2];
+          } else {
+            nodeList.push(neighbor);
+            openList.push(pos2);
+          }
+          neighbor.parent = current;
+          neighbor.x = x2;
+          neighbor.y = y2;
+          neighbor.g = g2;
+          neighbor.f = g2 + $gameMap.distance(x2, y2, goalX, goalY);
+          if (!best || neighbor.f - neighbor.g < best.f - best.g) {
+            best = neighbor;
+          }
+        }
+      }
+    }
+
+    let node = best;
+    while (node.parent && node.parent !== start) node = node.parent;
+
+    const deltaX1 = $gameMap.deltaX(node.x, start.x);
+    const deltaY1 = $gameMap.deltaY(node.y, start.y);
+
+    if (deltaY1 > 0 && deltaX1 > 0) return 3;
+    if (deltaY1 > 0 && deltaX1 < 0) return 1;
+    if (deltaY1 < 0 && deltaX1 < 0) return 7;
+    if (deltaY1 < 0 && deltaX1 > 0) return 9;
+
+    if (deltaY1 > 0) return 2;
+    if (deltaX1 < 0) return 4;
+    if (deltaX1 > 0) return 6;
+    if (deltaY1 < 0) return 8;
+
+    const deltaX2 = this.deltaXFrom(goalX);
+    const deltaY2 = this.deltaYFrom(goalY);
+
+    if (Math.abs(deltaX2) > Math.abs(deltaY2)) return deltaX2 > 0 ? 4 : 6;
+
+    if (deltaY2 !== 0) return deltaY2 > 0 ? 8 : 2;
+
+    return 0;
+  }
 })();
