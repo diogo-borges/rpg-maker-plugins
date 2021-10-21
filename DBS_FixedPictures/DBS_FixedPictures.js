@@ -33,7 +33,7 @@
  *   1. Como usar o plugin?
  *       Use $ antes do nome da imagem para indicar ao plugin que a imagem
  *       deve ser fixada
- *       Se a imagem tiver ! antes do nome, use $ antes da exclamação.
+ *       Se a imagem tiver ! antes do nome, use $ depois da exclamação.
  * 
  *      Exemplo:
  *         $FixedImage1.png
